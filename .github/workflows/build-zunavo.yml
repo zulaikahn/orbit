@@ -1,0 +1,104 @@
+name: Build and publish Zunavo downloads
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Prepare Zunavo beta release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: zulaikahn/orbit
+        run: |
+          gh release view v0.1.5 || gh release create v0.1.5 --target main --prerelease --title 'Zunavo 0.1.5 — Windows and Android preview' --notes 'Orbit is now Zunavo. Windows installer includes the new name and logo. Android APK is a debug preview for compatible direct-video playback; native mobile torrent playback is not implemented. Unsigned beta; source availability and playback reliability vary. Existing app identifiers and local data keys are retained.'
+  windows:
+    needs: release
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Rebrand verified desktop payload
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/zulaikahn/orbit/releases/download/v0.1.4/Orbit-Desktop-0.1.4-Windows.zip' -OutFile desktop.zip
+          if ((Get-FileHash desktop.zip -Algorithm SHA256).Hash -ne 'B342CB69DCE4D26F22F25D7AB445D113D2FF8EF07A07A969E5C58BCB6D0626DC') { throw 'Desktop checksum mismatch' }
+          Expand-Archive desktop.zip payload
+          npx --yes --package=@electron/asar@3.4.1 asar extract payload/resources/app.asar app-source
+          if ($LASTEXITCODE -ne 0) { throw 'App extraction failed' }
+          Expand-Archive Zunavo-Desktop-Overlay.zip overlay
+          Copy-Item overlay/* app-source -Recurse -Force
+          npx --yes --package=@electron/asar@3.4.1 asar pack app-source payload/resources/zunavo.asar --unpack '**/*.{node,exe,dll}'
+          if ($LASTEXITCODE -ne 0) { throw 'App packaging failed' }
+          Move-Item payload/resources/zunavo.asar payload/resources/app.asar -Force
+          Copy-Item payload/resources/zunavo.asar.unpacked/* payload/resources/app.asar.unpacked -Recurse -Force
+          Rename-Item payload/Orbit.exe Zunavo.exe
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' '/DPayloadDir=payload' Zunavo-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Verify install and uninstall
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'Zunavo-Installer-Check'
+          $setup = (Resolve-Path 'dist/Zunavo-Setup-0.1.5-Windows.exe').Path
+          $process = Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=',('/DIR="' + $destination + '"')) -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Installation failed' }
+          if (!(Test-Path (Join-Path $destination 'Zunavo.exe'))) { throw 'Zunavo.exe missing' }
+          if ((Get-FileHash (Join-Path $destination 'resources/app.asar')).Hash -ne (Get-FileHash 'payload/resources/app.asar').Hash) { throw 'Payload differs' }
+          $process = Start-Process (Join-Path $destination 'unins000.exe') -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Uninstall failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Zunavo-Windows-installer
+          path: dist/Zunavo-Setup-0.1.5-Windows.exe
+      - name: Publish Windows installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: zulaikahn/orbit
+        run: gh release upload v0.1.5 dist/Zunavo-Setup-0.1.5-Windows.exe
+  android:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Build Zunavo Android preview
+        run: |
+          unzip -q Zunavo-Native-Source.zip -d native
+          cd native
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify-assets
+          npx cap sync android
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../../Zunavo-Android-0.1.1-preview.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Zunavo-Android-preview
+          path: Zunavo-Android-0.1.1-preview.apk
+      - name: Publish Android preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: zulaikahn/orbit
+        run: gh release upload v0.1.5 Zunavo-Android-0.1.1-preview.apk
