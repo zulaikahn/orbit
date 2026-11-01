@@ -1,0 +1,102 @@
+name: Build Orbit installers and phone previews
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download verified desktop release
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/zulaikahn/orbit/releases/download/v0.1.4/Orbit-Desktop-0.1.4-Windows.zip' -OutFile desktop.zip
+          if ((Get-FileHash desktop.zip -Algorithm SHA256).Hash -ne 'B342CB69DCE4D26F22F25D7AB445D113D2FF8EF07A07A969E5C58BCB6D0626DC') { throw 'Desktop download checksum mismatch' }
+          Expand-Archive desktop.zip payload
+          if (!(Test-Path payload/Orbit.exe)) { throw 'Orbit.exe missing from archive root' }
+      - name: Compile Windows installer
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (!(Test-Path $compiler)) { throw 'Inno Setup compiler missing from runner image' }
+          & $compiler '/DPayloadDir=payload' Orbit-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Verify installation and uninstallation on the build machine
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'Orbit-Installer-Check'
+          $setup = (Resolve-Path 'dist/Orbit-Setup-0.1.4-Windows.exe').Path
+          $process = Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=',('/DIR="' + $destination + '"')) -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Installation failed: $($process.ExitCode)" }
+          if (!(Test-Path (Join-Path $destination 'Orbit.exe'))) { throw 'Installed Orbit.exe missing' }
+          $installed = Get-FileHash (Join-Path $destination 'resources/app.asar') -Algorithm SHA256
+          $expected = Get-FileHash 'payload/resources/app.asar' -Algorithm SHA256
+          if ($installed.Hash -ne $expected.Hash) { throw 'Installed app differs from verified payload' }
+          $uninstaller = Join-Path $destination 'unins000.exe'
+          $process = Start-Process $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw 'Uninstaller failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-Windows-installer
+          path: dist/Orbit-Setup-0.1.4-Windows.exe
+          retention-days: 7
+          if-no-files-found: error
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare native project
+        run: |
+          unzip -q Orbit-Native-Source.zip -d native
+          cd native
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify-assets
+          npx cap sync android
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+      - name: Build Android test APK
+        run: |
+          cd native/android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-Android-native-preview
+          path: native/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
+  ios-check:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare iPhone project
+        run: |
+          unzip -q Orbit-Native-Source.zip -d native
+          cd native
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run verify-assets
+          npx cap sync ios
+      - name: Compile iOS Simulator app without signing
+        run: |
+          xcodebuild -project native/ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios-build CODE_SIGNING_ALLOWED=NO build
+      - name: Package simulator app
+        run: ditto -c -k --keepParent ios-build/Build/Products/Debug-iphonesimulator/App.app Orbit-iOS-Simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-iOS-simulator-only
+          path: Orbit-iOS-Simulator.zip
+          retention-days: 7
+          if-no-files-found: error
