@@ -1,10 +1,20 @@
 name: Build Orbit installers and phone previews
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Build target
+        type: choice
+        default: all
+        options:
+          - all
+          - windows
+          - mobile
 permissions:
   contents: read
 jobs:
   windows:
+    if: inputs.target != 'mobile'
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -44,6 +54,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   android:
+    if: inputs.target != 'windows'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -75,6 +86,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   ios-check:
+    if: inputs.target != 'windows'
     runs-on: macos-15
     timeout-minutes: 30
     steps:
