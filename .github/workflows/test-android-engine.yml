@@ -28,7 +28,7 @@ jobs:
           chmod +x android/gradlew
       - name: Compile APK and run selection and seeking-boundary tests
         working-directory: native/android
-        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest --no-daemon
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: Zunavo-Android-0.2.0-experimental
@@ -58,7 +58,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: cd native/android && ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.hash=$(cat ../../fixture-tools/fixture-hash.txt) --no-daemon
+          script: cd native/android && ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.hash=$(cat ../../fixture-tools/fixture-hash.txt) --no-daemon
       - uses: actions/upload-artifact@v4
         if: always()
         with:
