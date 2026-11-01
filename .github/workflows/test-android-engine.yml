@@ -41,11 +41,11 @@ jobs:
           mkdir fixture-tools
           cd fixture-tools
           npm init -y
-          npm install --ignore-scripts --no-audit --no-fund webtorrent@3.0.21
+          npm install --no-audit --no-fund webtorrent@3.0.21
           cp ../native/scripts/torrent-fixture.mjs .
           nohup node torrent-fixture.mjs ../fixture.mp4 > fixture.log 2>&1 &
           for i in $(seq 1 30); do test -s fixture-hash.txt && break; sleep 1; done
-          test -s fixture-hash.txt
+          test -s fixture-hash.txt || { cat fixture.log; exit 1; }
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
