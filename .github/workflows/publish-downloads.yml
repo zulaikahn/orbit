@@ -1,0 +1,37 @@
+name: Publish verified Orbit downloads
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Retrieve completed Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: Orbit-Windows-installer
+          path: downloads/windows
+          run-id: 41320937618
+          github-token: ${{ github.token }}
+      - name: Retrieve completed Android preview
+        uses: actions/download-artifact@v4
+        with:
+          name: Orbit-Android-native-preview
+          path: downloads/android
+          run-id: 41320937618
+          github-token: ${{ github.token }}
+      - name: Publish the two downloads to release v0.1.4
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: zulaikahn/orbit
+        run: |
+          set -eu
+          test -s downloads/windows/Orbit-Setup-0.1.4-Windows.exe
+          test -s downloads/android/app-debug.apk
+          mv downloads/android/app-debug.apk downloads/android/Orbit-Android-0.1.0-preview.apk
+          gh release upload v0.1.4 downloads/windows/Orbit-Setup-0.1.4-Windows.exe downloads/android/Orbit-Android-0.1.0-preview.apk
