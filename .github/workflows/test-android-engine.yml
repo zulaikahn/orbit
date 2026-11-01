@@ -58,7 +58,9 @@ jobs:
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          script: cd native/android && ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.hash=$(cat ../../fixture-tools/fixture-hash.txt) --no-daemon
+          script: |
+            cd native/android
+            ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.hash=$(cat ../../fixture-tools/fixture-hash.txt) --no-daemon || { adb logcat -d -s ZunavoTorrent; exit 1; }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
