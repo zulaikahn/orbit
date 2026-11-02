@@ -16,13 +16,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: zulaikahn/orbit
         run: |
-          test "$(gh api repos/zulaikahn/orbit/actions/runs/41349117076 --jq .conclusion)" = success
+          test "$(gh api repos/zulaikahn/orbit/actions/runs/41502227185 --jq .conclusion)" = success
       - name: Retrieve tested Android build
         uses: actions/download-artifact@v4
         with:
-          name: Zunavo-Android-0.2.0-experimental
+          name: Zunavo-Android-0.2.1-experimental
           path: downloads/android
-          run-id: 41349117076
+          run-id: 41502227185
           github-token: ${{ github.token }}
       - name: Publish experimental Android download
         env:
@@ -31,7 +31,7 @@ jobs:
         run: |
           set -eu
           test -s downloads/android/app-debug.apk
-          mv downloads/android/app-debug.apk downloads/android/Zunavo-Android-0.2.0-experimental.apk
-          sha256sum downloads/android/Zunavo-Android-0.2.0-experimental.apk > downloads/android/SHA256SUMS.txt
-          gh release create android-v0.2.0 --target main --prerelease --title 'Zunavo Android 0.2.0 — experimental native torrent player' --notes 'Experimental Android-only native torrent player. APK compilation, file selection tests, and playback plus seeking of an original generated video passed on an Android 15 emulator in run 41349117076. Physical Android phone playback and third-party provider compatibility remain unverified. This does not change the public website or iPhone support. Debug-signed testing build; an existing preview may have a different signing key. Temporary video cache is cleared when leaving the player. Use content you have permission to access.'
-          gh release upload android-v0.2.0 downloads/android/Zunavo-Android-0.2.0-experimental.apk downloads/android/SHA256SUMS.txt
+          mv downloads/android/app-debug.apk downloads/android/Zunavo-Android-0.2.1-experimental.apk
+          sha256sum downloads/android/Zunavo-Android-0.2.1-experimental.apk > downloads/android/SHA256SUMS.txt
+          gh release create android-v0.2.1 --target main --prerelease --title 'Zunavo Android 0.2.1 — experimental native torrent player' --notes 'Experimental Android-only native torrent player with loading retries, fullscreen controls, a visible Torrentio connection card, and a storage check based on free phone space. APK compilation, file selection tests, and playback plus seeking of an original generated video passed on an Android 15 emulator in run 41502227185. Physical Android phone playback and third-party provider compatibility remain unverified. This does not change the public website or iPhone support. Debug-signed testing build; an existing preview may have a different signing key. Temporary video cache is cleared when leaving the player. Use content you have permission to access.'
+          gh release upload android-v0.2.1 downloads/android/Zunavo-Android-0.2.1-experimental.apk downloads/android/SHA256SUMS.txt
