@@ -22,6 +22,7 @@ jobs:
           cd native
           npm ci --ignore-scripts --no-audit --no-fund
           npm run verify-assets
+          node --test scripts/test-loading.cjs
           node --check www/native-torrent.js
           npx cap sync android
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
@@ -31,7 +32,7 @@ jobs:
         run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: Zunavo-Android-0.2.0-experimental
+          name: Zunavo-Android-0.2.1-experimental
           path: native/android/app/build/outputs/apk/debug/app-debug.apk
       - name: Prepare original video and local torrent seeder
         run: |
